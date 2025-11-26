@@ -1,5 +1,6 @@
-from gevent import monkey
-monkey.patch_all()
+# WAJIB DI PALING ATAS
+import eventlet
+eventlet.monkey_patch()
 
 import sqlite3
 import os
@@ -11,9 +12,7 @@ from flask_socketio import SocketIO, emit
 
 # --- KONFIGURASI ---
 app = Flask(__name__)
-
-# Ganti async_mode ke 'threading' agar aman dan stabil
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 INSTANCE_FOLDER = os.path.join(BASE_DIR, 'instance')
@@ -60,12 +59,10 @@ def simpan_harga(symbol, harga):
         print(f"[!] Gagal menyimpan: {e}")
 
 def update_stock_price():
-    """Worker mengambil data"""
     print("--- Worker Memulai ---")
-    time.sleep(5) # Tunggu server up
+    socketio.sleep(5) 
     
     while True:
-        print("\n[*] Mengambil data dari Yahoo...")
         for symbol in TARGET_SYMBOLS:
             try:
                 ticker = yf.Ticker(symbol)
@@ -76,20 +73,16 @@ def update_stock_price():
                     if not data.empty:
                         harga = data['Close'].iloc[-1]
                     else:
-                        print(f"[!] Data kosong: {symbol}")
                         continue
-                
                 simpan_harga(symbol, harga)
             except Exception as e:
                 print(f"[!] Error {symbol}: {e}")
         
-        # Gunakan time.sleep() biasa karena mode threading
-        socketio.sleep(30) 
+        socketio.sleep(60) 
 
 def start_background_task():
-    thread = threading.Thread(target=update_stock_price)
-    thread.daemon = True
-    thread.start()
+    # Gunakan socketio.start_background_task() agar kompatibel dengan eventlet
+    socketio.start_background_task(update_stock_price)
 
 @app.route('/')
 def index():
@@ -129,4 +122,4 @@ if __name__ == '__main__':
     init_db()
     start_background_task()
     port = int(os.environ.get("PORT", 5000))
-    socketio.run(app, host='0.0.0.0', port=port, allow_unsafe_werkzeug=True)
+    socketio.run(app, host='0.0.0.0', port=port, debug=False)
