@@ -1,3 +1,6 @@
+from gevent import monkey
+monkey.patch_all()
+
 import sqlite3
 import os
 import time
@@ -10,7 +13,7 @@ from flask_socketio import SocketIO, emit
 app = Flask(__name__)
 
 # Ganti async_mode ke 'threading' agar aman dan stabil
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 INSTANCE_FOLDER = os.path.join(BASE_DIR, 'instance')
@@ -81,7 +84,7 @@ def update_stock_price():
                 print(f"[!] Error {symbol}: {e}")
         
         # Gunakan time.sleep() biasa karena mode threading
-        time.sleep(30) 
+        socketio.sleep(30) 
 
 def start_background_task():
     thread = threading.Thread(target=update_stock_price)
@@ -125,5 +128,5 @@ def get_data():
 if __name__ == '__main__':
     init_db()
     start_background_task()
-    print("[*] Server Threading berjalan...")
-    socketio.run(app, debug=True, use_reloader=False)
+    port = int(os.environ.get("PORT", 5000))
+    socketio.run(app, host='0.0.0.0', port=port, allow_unsafe_werkzeug=True)
