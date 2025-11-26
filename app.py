@@ -60,7 +60,7 @@ def simpan_harga(symbol, harga):
 def update_stock_price():
     """Worker Background"""
     print("--- Worker Memulai ---")
-    socketio.sleep(5) 
+    time.sleep(5) 
     
     while True:
         print("\n[*] Mengambil data baru...")
@@ -97,7 +97,7 @@ def update_stock_price():
                 print(f"[!] Error sistem {symbol}: {e}")
         
         # Jeda 60 detik
-        socketio.sleep(30) 
+        time.sleep(30) 
 
 def start_background_task():
     # Cek agar thread tidak dobel (opsional tapi bagus)
