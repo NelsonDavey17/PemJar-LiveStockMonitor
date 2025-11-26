@@ -3,4 +3,5 @@ Flask-SocketIO==5.3.6
 simple-websocket==1.0.0
 yfinance>=0.2.40
 gunicorn==21.2.0
+APScheduler==3.10.4
 setuptools
