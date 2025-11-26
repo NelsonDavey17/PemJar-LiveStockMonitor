@@ -6,3 +6,5 @@ python-socketio==5.10.0
 yfinance==0.2.33
 gunicorn==21.2.0
 setuptools
+requests
+requests-cache==0.9.8
