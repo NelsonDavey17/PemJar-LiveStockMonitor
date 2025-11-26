@@ -9,8 +9,7 @@ from flask_socketio import SocketIO, emit
 # --- KONFIGURASI ---
 app = Flask(__name__)
 
-# PENTING: Kita gunakan mode 'threading' yang stabil di Python 3.13
-# Ini menghindari error 'distutils' dan 'RLock'
+# Mode Threading (Stabil untuk Render)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -48,9 +47,8 @@ def simpan_harga(symbol, harga):
         conn.commit()
         conn.close()
         
-        print(f"[✔] {symbol} -> {harga}")
+        print(f"[✔] Broadcast: {symbol} -> {harga}")
         
-        # Kirim ke Frontend
         socketio.emit('update_grafik', {
             'symbol': symbol,
             'harga': harga,
@@ -60,16 +58,14 @@ def simpan_harga(symbol, harga):
         print(f"[!] Gagal menyimpan: {e}")
 
 def update_stock_price():
-    """Worker Background"""
     print("--- Worker Memulai ---")
-    time.sleep(5) # Tunggu server siap
+    time.sleep(5) 
     
     while True:
-        print("\n[*] Mengambil data baru...")
+        print("\n[*] Mengambil data dari Yahoo...")
         for symbol in TARGET_SYMBOLS:
             try:
                 ticker = yf.Ticker(symbol)
-                # Logika pengambilan harga
                 if hasattr(ticker, 'fast_info') and ticker.fast_info.last_price:
                     harga = ticker.fast_info.last_price
                 else:
@@ -84,13 +80,15 @@ def update_stock_price():
             except Exception as e:
                 print(f"[!] Error {symbol}: {e}")
         
-        # Gunakan time.sleep biasa (karena mode threading)
-        time.sleep(60) 
+        time.sleep(30) 
 
 def start_background_task():
-    thread = threading.Thread(target=update_stock_price)
-    thread.daemon = True
-    thread.start()
+    # Cek agar thread tidak dobel (opsional tapi bagus)
+    if not any(t.name == "StockWorker" for t in threading.enumerate()):
+        thread = threading.Thread(target=update_stock_price, name="StockWorker")
+        thread.daemon = True
+        thread.start()
+        print("[*] Background Worker Berjalan!")
 
 # --- ROUTE ---
 @app.route('/')
@@ -99,15 +97,11 @@ def index():
 
 @app.route('/api/data')
 def get_data():
-    """Ambil data sejarah agar grafik tidak kosong saat refresh"""
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
-        
         hasil_akhir = []
-        
-        # Ambil 50 data terakhir PER SIMBOL
         for symbol in TARGET_SYMBOLS:
             query = '''
                 SELECT waktu, symbol, harga 
@@ -118,23 +112,24 @@ def get_data():
             '''
             c.execute(query, (symbol,))
             rows = c.fetchall()
-            
             for row in reversed(rows):
                 hasil_akhir.append({
                     'waktu': row['waktu'],
                     'symbol': row['symbol'],
                     'harga': row['harga']
                 })
-        
         conn.close()
         hasil_akhir.sort(key=lambda x: x['waktu'])
         return jsonify(hasil_akhir)
     except Exception as e:
         return jsonify({'error': str(e)})
 
+# --- PERBAIKAN UTAMA DI SINI ---
+# Jalankan fungsi ini di Global Scope agar Gunicorn mengeksekusinya saat import
+init_db()
+start_background_task()
+
+# Blok ini hanya jalan di Localhost (python app.py)
 if __name__ == '__main__':
-    init_db()
-    start_background_task()
-    # Jalankan server (Support Gunicorn di Render)
     port = int(os.environ.get("PORT", 5000))
     socketio.run(app, host='0.0.0.0', port=port, debug=False)
