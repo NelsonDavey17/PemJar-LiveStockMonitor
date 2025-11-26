@@ -3,9 +3,9 @@ eventlet.monkey_patch()
 import sqlite3
 import os
 import time
-import threading
+from threading import Lock
 import yfinance as yf
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, render_template, request
 from flask_socketio import SocketIO, emit
 
 app = Flask(__name__)
@@ -13,6 +13,8 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 INSTANCE_FOLDER = os.path.join(BASE_DIR, 'instance')
 DB_PATH = os.path.join(INSTANCE_FOLDER, 'saham.db')
+thread = None
+thread_lock = Lock()
 TARGET_SYMBOLS = ['BTC-USD', 'DOGE-USD', 'SOL-USD']
 
 if not os.path.exists(INSTANCE_FOLDER):
@@ -52,11 +54,11 @@ def simpan_harga(symbol, harga):
     except Exception as e:
         print(f"[!] Gagal menyimpan: {e}")
 
-def update_stock_price():
-    """Worker Background"""
-    print("--- Worker Memulai ---")
-    socketio.sleep(5) 
+def background_thread():
+    """Fungsi ini berjalan di background"""
+    print("--- [!!!] WORKER AKHIRNYA BERJALAN [!!!] ---")
     while True:
+        print("[*] Mengambil data baru...")
         print("\n[*] Mengambil data baru...")
         for symbol in TARGET_SYMBOLS:
             harga = None
@@ -77,14 +79,20 @@ def update_stock_price():
                     print(f"[!] Gagal total mengambil data {symbol} (Yahoo menolak)")
             except Exception as e:
                 print(f"[!] Error sistem {symbol}: {e}")
-        socketio.sleep(30) 
+        socketio.sleep(30)
 
-def start_background_task():
-    if not any(t.name == "StockWorker" for t in threading.enumerate()):
-        thread = threading.Thread(target=update_stock_price, name="StockWorker")
-        thread.daemon = True
-        thread.start()
-        print("[*] Background Worker Berjalan!")
+@socketio.on('connect')
+def connect():
+    global thread
+    print(f"[+] Client terhubung: {request.sid}")
+    with thread_lock:
+        if thread is None:
+            print("[+] Memulai Background Thread untuk pertama kalinya...")
+            thread = socketio.start_background_task(background_thread)
+
+@socketio.on('disconnect')
+def disconnect():
+    print(f"[-] Client putus: {request.sid}")
 
 @app.route('/')
 def index():
@@ -119,13 +127,10 @@ def get_data():
     except Exception as e:
         return jsonify({'error': str(e)})
 
-def start_worker():
-    socketio.start_background_task(target=update_stock_price)
+
 
 init_db()
-start_worker()
 
-# Blok ini hanya jalan di Localhost (python app.py)
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     socketio.run(app, host='0.0.0.0', port=port, debug=False)
