@@ -1,3 +1,5 @@
+import eventlet
+eventlet.monkey_patch()
 import sqlite3
 import os
 import time
@@ -6,12 +8,8 @@ import yfinance as yf
 from flask import Flask, jsonify, render_template
 from flask_socketio import SocketIO, emit
 
-# --- KONFIGURASI ---
 app = Flask(__name__)
-
-# Mode Threading (Stabil untuk Render)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
-
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 INSTANCE_FOLDER = os.path.join(BASE_DIR, 'instance')
 DB_PATH = os.path.join(INSTANCE_FOLDER, 'saham.db')
@@ -20,7 +18,6 @@ TARGET_SYMBOLS = ['BTC-USD', 'DOGE-USD', 'SOL-USD']
 if not os.path.exists(INSTANCE_FOLDER):
     os.makedirs(INSTANCE_FOLDER)
 
-# --- FUNGSI DATABASE ---
 def init_db():
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -46,9 +43,7 @@ def simpan_harga(symbol, harga):
         c.execute("INSERT INTO harga_saham (symbol, harga) VALUES (?, ?)", (symbol, harga))
         conn.commit()
         conn.close()
-        
         print(f"[✔] Broadcast: {symbol} -> {harga}")
-        
         socketio.emit('update_grafik', {
             'symbol': symbol,
             'harga': harga,
@@ -61,52 +56,36 @@ def update_stock_price():
     """Worker Background"""
     print("--- Worker Memulai ---")
     socketio.sleep(5) 
-    
     while True:
         print("\n[*] Mengambil data baru...")
         for symbol in TARGET_SYMBOLS:
-            harga = None # Reset harga
-            
+            harga = None
             try:
                 ticker = yf.Ticker(symbol)
-                
-                # --- PERCOBAAN 1: Gunakan fast_info (Cepat tapi sering error di Cloud) ---
                 try:
-                    # Kita paksa akses properti ini untuk memicu error jika data rusak
                     if ticker.fast_info and ticker.fast_info.last_price:
                         harga = ticker.fast_info.last_price
                 except Exception:
-                    # Jika fast_info gagal (KeyError/dll), JANGAN MENYERAH.
-                    # Lanjut ke percobaan 2 diam-diam.
                     pass 
-
-                # --- PERCOBAAN 2: Gunakan history (Lebih lambat tapi lebih stabil) ---
-                # Jika percobaan 1 gagal (harga masih None), pakai cara ini
                 if harga is None:
                     data = ticker.history(period='1d', interval='1m')
                     if not data.empty:
                         harga = data['Close'].iloc[-1]
-                
-                # --- PENYIMPANAN ---
                 if harga is not None:
                     simpan_harga(symbol, harga)
                 else:
                     print(f"[!] Gagal total mengambil data {symbol} (Yahoo menolak)")
-
             except Exception as e:
                 print(f"[!] Error sistem {symbol}: {e}")
-        
         socketio.sleep(30) 
 
 def start_background_task():
-    # Cek agar thread tidak dobel (opsional tapi bagus)
     if not any(t.name == "StockWorker" for t in threading.enumerate()):
         thread = threading.Thread(target=update_stock_price, name="StockWorker")
         thread.daemon = True
         thread.start()
         print("[*] Background Worker Berjalan!")
 
-# --- ROUTE ---
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -140,10 +119,11 @@ def get_data():
     except Exception as e:
         return jsonify({'error': str(e)})
 
-# --- PERBAIKAN UTAMA DI SINI ---
-# Jalankan fungsi ini di Global Scope agar Gunicorn mengeksekusinya saat import
+def start_worker():
+    socketio.start_background_task(target=update_stock_price)
+
 init_db()
-start_background_task()
+start_worker()
 
 # Blok ini hanya jalan di Localhost (python app.py)
 if __name__ == '__main__':
