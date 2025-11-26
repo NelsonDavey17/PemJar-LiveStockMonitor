@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Live Stock Monitor</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            padding: 20px; 
+            background: #f0f2f5; 
+            color: #333;
+        }
+        .container { 
+            max-width: 1000px; 
+            margin: 0 auto; 
+            display: flex;
+            flex-direction: column;
+            gap: 25px; 
+        }
+        .chart-box { 
+            background: white; 
+            padding: 20px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            height: 350px; 
+            position: relative;
+        }
+        h3 { 
+            margin: 0 0 15px 0; 
+            color: #444; 
+            font-size: 1.1rem;
+            border-bottom: 1px solid #eee; 
+            padding-bottom: 10px;
+        }
+        .canvas-wrapper {
+            height: 280px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <h1 style="text-align: center; margin-bottom: 30px;">📈 Monitor Saham Real-Time (Multi-Chart)</h1>
+    
+    <div class="container">
+        <!-- Grafik 1: Bitcoin -->
+        <div class="chart-box">
+            <h3>Bitcoin (BTC-USD)</h3>
+            <div class="canvas-wrapper">
+                <canvas id="chartBTC"></canvas>
+            </div>
+        </div>
+
+        <!-- Grafik 2: Dogecoin -->
+        <div class="chart-box">
+            <h3>Dogecoin (DOGE-USD)</h3>
+            <div class="canvas-wrapper">
+                <canvas id="chartDOGE"></canvas>
+            </div>
+        </div>
+
+        <!-- Grafik 3: Solana -->
+        <div class="chart-box">
+            <h3>Solana (SOL-USD)</h3>
+            <div class="canvas-wrapper">
+                <canvas id="chartSOL"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
