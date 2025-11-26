@@ -1,6 +1,5 @@
-flask==3.0.0
-flask-socketio==5.3.6
-gevent==23.9.1
-gevent-websocket==0.10.1
-yfinance==0.2.33
-gunicorn==21.2.0
+flask
+flask-socketio
+simple-websocket
+yfinance
+gunicorn

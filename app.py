@@ -1,8 +1,3 @@
-# --- WAJIB DI BARIS PALING ATAS ---
-from gevent import monkey
-monkey.patch_all()
-# ----------------------------------
-
 import sqlite3
 import os
 import time
@@ -11,9 +6,11 @@ import yfinance as yf
 from flask import Flask, jsonify, render_template
 from flask_socketio import SocketIO, emit
 
+# --- KONFIGURASI ---
 app = Flask(__name__)
-# Menggunakan mode gevent
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
+
+# Ganti async_mode ke 'threading' agar aman dan stabil
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 INSTANCE_FOLDER = os.path.join(BASE_DIR, 'instance')
@@ -51,7 +48,6 @@ def simpan_harga(symbol, harga):
         
         print(f"[✔] Broadcast: {symbol} -> {harga}")
         
-        # Kirim update realtime
         socketio.emit('update_grafik', {
             'symbol': symbol,
             'harga': harga,
@@ -61,9 +57,9 @@ def simpan_harga(symbol, harga):
         print(f"[!] Gagal menyimpan: {e}")
 
 def update_stock_price():
-    """Worker mengambil data setiap 60 detik"""
+    """Worker mengambil data"""
     print("--- Worker Memulai ---")
-    socketio.sleep(5) 
+    time.sleep(5) # Tunggu server up
     
     while True:
         print("\n[*] Mengambil data dari Yahoo...")
@@ -84,8 +80,8 @@ def update_stock_price():
             except Exception as e:
                 print(f"[!] Error {symbol}: {e}")
         
-        # Di gevent, socketio.sleep() sangat direkomendasikan
-        socketio.sleep(60) 
+        # Gunakan time.sleep() biasa karena mode threading
+        time.sleep(30) 
 
 def start_background_task():
     thread = threading.Thread(target=update_stock_price)
@@ -129,5 +125,5 @@ def get_data():
 if __name__ == '__main__':
     init_db()
     start_background_task()
-    print("[*] Server Gevent berjalan...")
+    print("[*] Server Threading berjalan...")
     socketio.run(app, debug=True, use_reloader=False)
