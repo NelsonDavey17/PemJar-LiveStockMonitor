@@ -96,10 +96,10 @@ async function startApp() {
 
 function connectWebSocket() {
     const socket = io({
-        transports: ['polling'],
-        upgrade: false
+        transports: ['polling', 'websocket'],
+        reconnection: true,
+        reconnectionAttempts: 5
     });
-
     socket.on('connect', () => {
         console.log("✅ Terhubung ke WebSocket");
     });

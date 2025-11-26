@@ -8,7 +8,7 @@ from flask_socketio import SocketIO, emit
 
 app = Flask(__name__)
 
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading', ping_timeout=10, ping_interval=5)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading', ping_timeout=60, ping_interval=25)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 INSTANCE_FOLDER = os.path.join(BASE_DIR, 'instance')
@@ -57,7 +57,7 @@ def simpan_harga(symbol, harga):
 def update_stock_price():
     """Worker Background"""
     print("--- Worker Memulai ---")
-    time.sleep(5) 
+    socketio.sleep(5) 
     
     while True:
         print("\n[*] Mengambil data baru...")
@@ -82,7 +82,7 @@ def update_stock_price():
 
             except Exception as e:
                 print(f"[!] Error sistem {symbol}: {e}")
-        time.sleep(30) 
+        socketio.sleep(30) 
 
 def start_background_task():
     if not any(t.name == "StockWorker" for t in threading.enumerate()):
