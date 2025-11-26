@@ -12,6 +12,7 @@ from flask_socketio import SocketIO, emit
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
+# --- KONFIGURASI ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 INSTANCE_FOLDER = os.path.join(BASE_DIR, 'instance')
 DB_PATH = os.path.join(INSTANCE_FOLDER, 'saham.db')
@@ -45,33 +46,47 @@ def simpan_harga(symbol, harga):
         c.execute("INSERT INTO harga_saham (symbol, harga) VALUES (?, ?)", (symbol, harga))
         conn.commit()
         conn.close()
+        
         print(f"[✔] Tersimpan: {symbol} -> {harga}")
+        
         socketio.emit('update_grafik', {
             'symbol': symbol,
             'harga': harga,
             'waktu': time.strftime('%Y-%m-%d %H:%M:%S')
         })
     except Exception as e:
-        print(f"[!] Gagal menyimpan: {e}")
+        print(f"[!] Gagal menyimpan {symbol}: {e}")
 
 def update_stock_price():
     print("--- Memulai Worker ---")
+    # Tunggu sebentar agar DB siap sepenuhnya
+    socketio.sleep(3)
+    
     while True:
+        print("\n[*] Mengambil data baru...")
         for symbol in TARGET_SYMBOLS:
             try:
                 ticker = yf.Ticker(symbol)
+                
+                # Prioritaskan fast_info
                 if hasattr(ticker, 'fast_info') and ticker.fast_info.last_price:
                     harga = ticker.fast_info.last_price
                 else:
+                    # Fallback ke history 1 hari
                     data = ticker.history(period='1d')
                     if not data.empty:
                         harga = data['Close'].iloc[-1]
                     else:
+                        print(f"[!] Data kosong: {symbol}")
                         continue
+                
                 simpan_harga(symbol, harga)
+
             except Exception as e:
-                print(f"[!] Error {symbol}: {e}")
-        socketio.sleep(30)
+                print(f"[!] Error yfinance {symbol}: {e}")
+        
+        print("[*] Menunggu 15 detik...")
+        socketio.sleep(15)
 
 def start_background_task():
     thread = threading.Thread(target=update_stock_price)
@@ -84,11 +99,16 @@ def index():
 
 @app.route('/api/data')
 def get_data():
+    """
+    Mengambil data sejarah 50 terakhir per simbol.
+    """
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
+        
         hasil_akhir = []
+        
         for symbol in TARGET_SYMBOLS:
             query = '''
                 SELECT waktu, symbol, harga 
@@ -99,14 +119,20 @@ def get_data():
             '''
             c.execute(query, (symbol,))
             rows = c.fetchall()
+            
+            # Balik urutan (Lama -> Baru)
             for row in reversed(rows):
                 hasil_akhir.append({
                     'waktu': row['waktu'],
                     'symbol': row['symbol'],
                     'harga': row['harga']
                 })
+        
         conn.close()
+        
+        # Sortir berdasarkan waktu agar urut di grafik
         hasil_akhir.sort(key=lambda x: x['waktu'])
+        
         return jsonify(hasil_akhir)
     except Exception as e:
         return jsonify({'error': str(e)})

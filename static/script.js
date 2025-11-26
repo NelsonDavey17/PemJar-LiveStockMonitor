@@ -2,7 +2,7 @@ const charts = {};
 
 const commonOptions = {
     responsive: true,
-    maintainAspectRatio: false, 
+    maintainAspectRatio: false,
     interaction: { mode: 'index', intersect: false },
     plugins: { legend: { display: false } },
     scales: {
@@ -13,7 +13,7 @@ const commonOptions = {
         line: { tension: 0.3, borderWidth: 2 },
         point: { radius: 0, hitRadius: 10 }
     },
-    animation: false
+    animation: false // Matikan animasi agar sejarah langsung muncul
 };
 
 function createChart(canvasId, color) {
@@ -42,38 +42,70 @@ function initCharts() {
 function updateChart(symbol, timestamp, price) {
     const chart = charts[symbol];
     if (!chart) return;
+
+    // Format waktu: Ambil HH:MM:SS saja
     const timeLabel = timestamp.split(' ')[1];
-    const lastLabel = chart.data.labels[chart.data.labels.length - 1];
-    if (lastLabel === timeLabel) return;
+
+    // CEK DUPLIKASI: Jangan masukkan jika waktu sama dengan data terakhir
+    const currentLabels = chart.data.labels;
+    if (currentLabels.length > 0 && currentLabels[currentLabels.length - 1] === timeLabel) {
+        return; 
+    }
+
     chart.data.labels.push(timeLabel);
     chart.data.datasets[0].data.push(price);
+
+    // Limit tampilan grafik agar tidak berat (scrolling)
     if (chart.data.labels.length > 50) {
         chart.data.labels.shift();
         chart.data.datasets[0].data.shift();
     }
+
     chart.update('none');
 }
 
-async function fetchData() {
+// Fungsi Utama: Ambil Data Sejarah -> Lalu Dengarkan WebSocket
+async function startApp() {
+    initCharts(); // Siapkan kanvas kosong
+
     try {
+        // 1. Ambil Data Sejarah dari Database via API
+        console.log("Mengambil data sejarah...");
         const response = await fetch('/api/data');
         const data = await response.json();
-        data.forEach(item => {
-            updateChart(item.symbol, item.waktu, item.harga);
-        });
-        console.log("Data sejarah berhasil dimuat:", data.length, "poin data");
+
+        // Masukkan data sejarah ke grafik
+        if (data.length > 0) {
+            data.forEach(item => {
+                updateChart(item.symbol, item.waktu, item.harga);
+            });
+            console.log(`Berhasil memuat ${data.length} data sejarah.`);
+        } else {
+            console.log("Database masih kosong/sedikit data.");
+        }
+
+        // 2. Setelah sejarah masuk, baru nyalakan WebSocket
+        connectWebSocket();
+
     } catch (e) {
-        console.error("Gagal ambil history:", e);
+        console.error("Gagal memuat data:", e);
+        // Tetap nyalakan WebSocket meski API gagal
+        connectWebSocket();
     }
 }
 
-const socket = io();
-socket.on('connect', () => {
-    console.log("Terhubung ke WebSocket Server");
-});
-socket.on('update_grafik', (data) => {
-    console.log("Data Baru:", data.symbol, data.harga);
-    updateChart(data.symbol, data.waktu, data.harga);
-});
-initCharts();
-fetchData();
+function connectWebSocket() {
+    const socket = io();
+
+    socket.on('connect', () => {
+        console.log("✅ Terhubung ke WebSocket");
+    });
+
+    socket.on('update_grafik', (data) => {
+        console.log("⚡ Data Baru:", data.symbol);
+        updateChart(data.symbol, data.waktu, data.harga);
+    });
+}
+
+// Jalankan aplikasi
+startApp();
