@@ -1,13 +1,13 @@
 import eventlet
 eventlet.monkey_patch()
 
+from flask import Flask, jsonify, render_template
+from flask_socketio import SocketIO, emit
 import sqlite3
 import os
 import time
 import threading
 import yfinance as yf
-from flask import Flask, jsonify, render_template
-from flask_socketio import SocketIO, emit
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
