@@ -5,12 +5,12 @@ import threading
 import yfinance as yf
 from flask import Flask, jsonify, render_template
 from flask_socketio import SocketIO, emit
-import requests
-import requests_cache
 
+# --- KONFIGURASI ---
 app = Flask(__name__)
 
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading', ping_timeout=60, ping_interval=25)
+# Mode Threading (Stabil untuk Render)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 INSTANCE_FOLDER = os.path.join(BASE_DIR, 'instance')
@@ -20,6 +20,7 @@ TARGET_SYMBOLS = ['BTC-USD', 'DOGE-USD', 'SOL-USD']
 if not os.path.exists(INSTANCE_FOLDER):
     os.makedirs(INSTANCE_FOLDER)
 
+# --- FUNGSI DATABASE ---
 def init_db():
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -56,40 +57,37 @@ def simpan_harga(symbol, harga):
     except Exception as e:
         print(f"[!] Gagal menyimpan: {e}")
 
-def get_session():
-    session = requests.Session()
-    # Menyamar sebagai Browser Chrome di Windows
-    session.headers.update({
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
-        'Cache-Control': 'max-age=0',
-    })
-    return session
-
 def update_stock_price():
     """Worker Background"""
     print("--- Worker Memulai ---")
     socketio.sleep(5) 
-    session = get_session()
+    
     while True:
         print("\n[*] Mengambil data baru...")
         for symbol in TARGET_SYMBOLS:
-            harga = None 
+            harga = None # Reset harga
+            
             try:
                 ticker = yf.Ticker(symbol)
+                
+                # --- PERCOBAAN 1: Gunakan fast_info (Cepat tapi sering error di Cloud) ---
                 try:
+                    # Kita paksa akses properti ini untuk memicu error jika data rusak
                     if ticker.fast_info and ticker.fast_info.last_price:
                         harga = ticker.fast_info.last_price
                 except Exception:
+                    # Jika fast_info gagal (KeyError/dll), JANGAN MENYERAH.
+                    # Lanjut ke percobaan 2 diam-diam.
                     pass 
+
+                # --- PERCOBAAN 2: Gunakan history (Lebih lambat tapi lebih stabil) ---
+                # Jika percobaan 1 gagal (harga masih None), pakai cara ini
                 if harga is None:
                     data = ticker.history(period='1d', interval='1m')
                     if not data.empty:
                         harga = data['Close'].iloc[-1]
                 
+                # --- PENYIMPANAN ---
                 if harga is not None:
                     simpan_harga(symbol, harga)
                 else:
@@ -97,15 +95,19 @@ def update_stock_price():
 
             except Exception as e:
                 print(f"[!] Error sistem {symbol}: {e}")
+        
+        # Jeda 60 detik
         socketio.sleep(30) 
 
 def start_background_task():
+    # Cek agar thread tidak dobel (opsional tapi bagus)
     if not any(t.name == "StockWorker" for t in threading.enumerate()):
         thread = threading.Thread(target=update_stock_price, name="StockWorker")
         thread.daemon = True
         thread.start()
         print("[*] Background Worker Berjalan!")
 
+# --- ROUTE ---
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -139,9 +141,12 @@ def get_data():
     except Exception as e:
         return jsonify({'error': str(e)})
 
+# --- PERBAIKAN UTAMA DI SINI ---
+# Jalankan fungsi ini di Global Scope agar Gunicorn mengeksekusinya saat import
 init_db()
 start_background_task()
 
+# Blok ini hanya jalan di Localhost (python app.py)
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     socketio.run(app, host='0.0.0.0', port=port, debug=False)
