@@ -1,5 +1,7 @@
-# HAPUS SEMUA IMPORT EVENTLET DI SINI.
-# Biarkan gunicorn_config.py yang menangani patching.
+# --- WAJIB DI BARIS PALING ATAS ---
+from gevent import monkey
+monkey.patch_all()
+# ----------------------------------
 
 import sqlite3
 import os
@@ -10,8 +12,8 @@ from flask import Flask, jsonify, render_template
 from flask_socketio import SocketIO, emit
 
 app = Flask(__name__)
-# Pastikan async_mode='eventlet' ditulis eksplisit
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+# Menggunakan mode gevent
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 INSTANCE_FOLDER = os.path.join(BASE_DIR, 'instance')
@@ -47,31 +49,30 @@ def simpan_harga(symbol, harga):
         conn.commit()
         conn.close()
         
+        print(f"[✔] Broadcast: {symbol} -> {harga}")
+        
         # Kirim update realtime
         socketio.emit('update_grafik', {
             'symbol': symbol,
             'harga': harga,
             'waktu': time.strftime('%Y-%m-%d %H:%M:%S')
         })
-        print(f"[✔] Broadcast: {symbol} -> {harga}")
     except Exception as e:
         print(f"[!] Gagal menyimpan: {e}")
 
 def update_stock_price():
-    """Worker mengambil data setiap 60 detik agar tidak kena rate limit"""
+    """Worker mengambil data setiap 60 detik"""
     print("--- Worker Memulai ---")
-    socketio.sleep(5) # Tunggu server up dulu
+    socketio.sleep(5) 
     
     while True:
         print("\n[*] Mengambil data dari Yahoo...")
         for symbol in TARGET_SYMBOLS:
             try:
                 ticker = yf.Ticker(symbol)
-                # Coba fast_info dulu
                 if hasattr(ticker, 'fast_info') and ticker.fast_info.last_price:
                     harga = ticker.fast_info.last_price
                 else:
-                    # Fallback history
                     data = ticker.history(period='1d')
                     if not data.empty:
                         harga = data['Close'].iloc[-1]
@@ -83,7 +84,7 @@ def update_stock_price():
             except Exception as e:
                 print(f"[!] Error {symbol}: {e}")
         
-        # PENTING: Gunakan socketio.sleep agar tidak memblokir WebSocket
+        # Di gevent, socketio.sleep() sangat direkomendasikan
         socketio.sleep(60) 
 
 def start_background_task():
@@ -97,7 +98,6 @@ def index():
 
 @app.route('/api/data')
 def get_data():
-    """Ambil 50 data terakhir per simbol untuk inisialisasi grafik"""
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
@@ -127,16 +127,7 @@ def get_data():
         return jsonify({'error': str(e)})
 
 if __name__ == '__main__':
-    # INI HANYA JALAN DI LOCALHOST
-    # Di Railway, Gunicorn yang akan menjalankan app, blok ini diabaikan
-    import eventlet
-    eventlet.monkey_patch()
     init_db()
     start_background_task()
-    print("[*] Server Local berjalan...")
+    print("[*] Server Gevent berjalan...")
     socketio.run(app, debug=True, use_reloader=False)
-else:
-    # INI JALAN DI RAILWAY (Saat diimport Gunicorn)
-    # Kita panggil fungsi init dan worker di sini
-    init_db()
-    start_background_task()
