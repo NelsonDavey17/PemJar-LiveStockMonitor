@@ -58,28 +58,45 @@ def simpan_harga(symbol, harga):
         print(f"[!] Gagal menyimpan: {e}")
 
 def update_stock_price():
+    """Worker Background"""
     print("--- Worker Memulai ---")
     time.sleep(5) 
     
     while True:
-        print("\n[*] Mengambil data dari Yahoo...")
+        print("\n[*] Mengambil data baru...")
         for symbol in TARGET_SYMBOLS:
+            harga = None # Reset harga
+            
             try:
                 ticker = yf.Ticker(symbol)
-                if hasattr(ticker, 'fast_info') and ticker.fast_info.last_price:
-                    harga = ticker.fast_info.last_price
-                else:
-                    data = ticker.history(period='1d')
+                
+                # --- PERCOBAAN 1: Gunakan fast_info (Cepat tapi sering error di Cloud) ---
+                try:
+                    # Kita paksa akses properti ini untuk memicu error jika data rusak
+                    if ticker.fast_info and ticker.fast_info.last_price:
+                        harga = ticker.fast_info.last_price
+                except Exception:
+                    # Jika fast_info gagal (KeyError/dll), JANGAN MENYERAH.
+                    # Lanjut ke percobaan 2 diam-diam.
+                    pass 
+
+                # --- PERCOBAAN 2: Gunakan history (Lebih lambat tapi lebih stabil) ---
+                # Jika percobaan 1 gagal (harga masih None), pakai cara ini
+                if harga is None:
+                    data = ticker.history(period='1d', interval='1m')
                     if not data.empty:
                         harga = data['Close'].iloc[-1]
-                    else:
-                        print(f"[!] Data kosong: {symbol}")
-                        continue
                 
-                simpan_harga(symbol, harga)
+                # --- PENYIMPANAN ---
+                if harga is not None:
+                    simpan_harga(symbol, harga)
+                else:
+                    print(f"[!] Gagal total mengambil data {symbol} (Yahoo menolak)")
+
             except Exception as e:
-                print(f"[!] Error {symbol}: {e}")
+                print(f"[!] Error sistem {symbol}: {e}")
         
+        # Jeda 60 detik
         time.sleep(30) 
 
 def start_background_task():
