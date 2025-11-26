@@ -95,12 +95,17 @@ async function startApp() {
 }
 
 function connectWebSocket() {
-    const socket = io();
+    const socket = io({
+        transports: ['polling'],
+        upgrade: false
+    });
 
     socket.on('connect', () => {
         console.log("✅ Terhubung ke WebSocket");
     });
-
+    socket.on('connect_error', (err) => {
+        console.error("❌ Gagal Konek:", err);
+    });
     socket.on('update_grafik', (data) => {
         console.log("⚡ Data Baru:", data.symbol);
         updateChart(data.symbol, data.waktu, data.harga);
