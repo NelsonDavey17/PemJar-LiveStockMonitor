@@ -40,6 +40,7 @@ function initCharts() {
     charts['DOGE-USD'] = createChart('chartDOGE', '#C2A633'); 
     charts['SOL-USD'] = createChart('chartSOL', '#9945FF');
     charts['ETH-USD'] = createChart('chartETH', '#45ff5eff');
+    charts['XRP-USD'] = createChart('chartXRP', '#ff6a45ff');
 }
 
 function updateChart(symbol, timestamp, price) {

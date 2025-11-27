@@ -15,7 +15,7 @@ INSTANCE_FOLDER = os.path.join(BASE_DIR, 'instance')
 DB_PATH = os.path.join(INSTANCE_FOLDER, 'saham.db')
 thread = None
 thread_lock = Lock()
-TARGET_SYMBOLS = ['BTC-USD', 'DOGE-USD', 'SOL-USD','ETH-USD']
+TARGET_SYMBOLS = ['BTC-USD', 'DOGE-USD', 'SOL-USD','ETH-USD','XRP-USD']
 
 if not os.path.exists(INSTANCE_FOLDER):
     os.makedirs(INSTANCE_FOLDER)
