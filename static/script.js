@@ -39,7 +39,7 @@ function initCharts() {
     charts['BTC-USD'] = createChart('chartBTC', '#F7931A'); 
     charts['DOGE-USD'] = createChart('chartDOGE', '#C2A633'); 
     charts['SOL-USD'] = createChart('chartSOL', '#9945FF');
-    charts['DAX P'] = createChart('chartDAX', '#45ff5eff');
+    charts['ETH-USD'] = createChart('chartETH', '#45ff5eff');
 }
 
 function updateChart(symbol, timestamp, price) {
